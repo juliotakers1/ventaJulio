@@ -1,14 +1,20 @@
 <template>
-  <div class="descuentos-view">
-    <div class="actions-container">
-      <button @click="showAddDiscountForm" class="action-button add-button">Crear Nuevo Descuento</button>
+  <div class="descuentos-view card-base">
+    <div class="view-header">
+      <h2>Gestión de Descuentos</h2>
+      <button @click="showAddDiscountForm" class="action-button success-button">
+        <i class="icon-add"></i> Crear Nuevo Descuento
+      </button>
     </div>
 
     <!-- Add/Edit Discount Modal -->
-    <div v-if="showDiscountForm" class="modal-overlay">
-      <div class="modal-content">
-        <h2>{{ isEditingDiscount ? 'Editar Descuento' : 'Crear Nuevo Descuento' }}</h2>
-        <form @submit.prevent="saveDiscount">
+    <div v-if="showDiscountFormModal" class="modal-overlay-global">
+      <div class="modal-content-global" style="max-width: 650px;">
+        <div class="modal-header-global">
+          <h3>{{ isEditingDiscount ? 'Editar Descuento' : 'Crear Nuevo Descuento' }}</h3>
+          <button @click="closeDiscountFormModal" class="modal-close-button">&times;</button>
+        </div>
+        <form @submit.prevent="triggerSaveDiscount">
           <div class="form-grid">
             <div class="form-group">
               <label for="name">Nombre del Descuento:</label>
@@ -53,17 +59,19 @@
           </div>
 
           <div class="form-actions">
-            <button type="submit" class="action-button primary">{{ isEditingDiscount ? 'Actualizar Descuento' : 'Guardar Descuento' }}</button>
-            <button type="button" @click="closeDiscountForm" class="action-button secondary">Cancelar</button>
+            <button type="button" @click="closeDiscountFormModal" class="action-button secondary-button">Cancelar</button>
+            <button type="submit" class="action-button primary-button">{{ isEditingDiscount ? 'Actualizar Descuento' : 'Guardar Descuento' }}</button>
           </div>
         </form>
       </div>
     </div>
 
     <!-- Discounts Table -->
-    <div class="discounts-table-container">
-      <h3>Listado de Descuentos Activos y Pasados</h3>
-      <table class="discounts-table">
+    <div class="table-container">
+       <div class="table-header-controls">
+        <input type="text" v-model="searchTerm" placeholder="Buscar descuento..." class="search-input">
+      </div>
+      <table class="app-table discounts-table">
         <thead>
           <tr>
             <th>Nombre</th>
@@ -78,404 +86,244 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-if="discountsList.length === 0">
-            <td colspan="9" class="no-discounts">No hay descuentos registrados.</td>
+          <tr v-if="paginatedDiscounts.length === 0">
+             <td colspan="9" class="no-results-message">{{ filteredDiscountsList.length === 0 && searchTerm ? 'No hay descuentos que coincidan.' : 'No hay descuentos registrados.' }}</td>
           </tr>
-          <tr v-for="discount in sortedDiscountsList" :key="discount.id" :class="{ 'inactive-discount': !isDiscountActive(discount) }">
-            <td>{{ discount.name }}</td>
-            <td>{{ discount.type === 'percentage' ? 'Porcentaje' : 'Monto Fijo' }}</td>
-            <td>{{ discount.type === 'percentage' ? `${discount.value}%` : `$${discount.value.toFixed(2)}` }}</td>
-            <td>{{ formatDate(discount.startDate) }}</td>
-            <td>{{ formatDate(discount.endDate) }}</td>
-            <td>{{ discount.applicabilityNotes }}</td>
-            <td>{{ discount.code || 'N/A' }}</td>
-            <td>
-              <span :class="isDiscountActive(discount) ? 'status-active' : 'status-inactive'">
-                {{ getDiscountStatus(discount) }}
+          <tr v-for="discount in paginatedDiscounts" :key="discount.id" :class="{ 'row-inactive': !isDiscountActive(discount) && getDiscountStatusText(discount) === 'Expirado', 'row-upcoming': getDiscountStatusText(discount) === 'Próximo' }">
+            <td data-label="Nombre">{{ discount.name }}</td>
+            <td data-label="Tipo">{{ discount.type === 'percentage' ? 'Porcentaje' : 'Monto Fijo' }}</td>
+            <td data-label="Valor">{{ discount.type === 'percentage' ? `${discount.value}%` : `$${typeof discount.value === 'number' ? discount.value.toFixed(2) : '0.00'}` }}</td>
+            <td data-label="Inicio">{{ formatDate(discount.startDate) }}</td>
+            <td data-label="Fin">{{ formatDate(discount.endDate) }}</td>
+            <td data-label="Aplicabilidad" class="notes-cell" :title="discount.applicabilityNotes">{{ truncateText(discount.applicabilityNotes, 40) }}</td>
+            <td data-label="Código">{{ discount.code || '-' }}</td>
+            <td data-label="Estado">
+              <span class="status-badge" :class="getDiscountStatusClass(discount)">
+                {{ getDiscountStatusText(discount) }}
               </span>
             </td>
-            <td>
-              <button @click="showEditDiscountForm(discount)" class="action-button edit-button">Editar</button>
-              <button @click="deleteDiscount(discount.id)" class="action-button delete-button">Eliminar</button>
+            <td data-label="Acciones" class="actions-cell">
+              <button @click="showEditDiscountForm(discount)" class="action-button warning-button btn-sm">
+                <i class="icon-edit"></i> Editar
+              </button>
+              <button @click="triggerDeleteDiscount(discount.id)" class="action-button danger-button btn-sm">
+                <i class="icon-delete"></i> Eliminar
+              </button>
             </td>
           </tr>
         </tbody>
       </table>
+      <div class="pagination-controls" v-if="totalPages > 1">
+        <button @click="prevPage" :disabled="currentPage === 1" class="action-button secondary-button btn-sm">Anterior</button>
+        <span>Página {{ currentPage }} de {{ totalPages }}</span>
+        <button @click="nextPage" :disabled="currentPage === totalPages" class="action-button secondary-button btn-sm">Siguiente</button>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
+// Script remains largely the same
 import { ref, reactive, computed } from 'vue';
+import { useDiscountStore } from '@/stores/discountStore.js';
 
-const initialDiscounts = [
-  {
-    id: 1,
-    name: 'Venta de Verano',
-    type: 'percentage', // 'percentage' or 'fixed'
-    value: 15, // 15%
-    startDate: '2024-07-01',
-    endDate: '2024-07-31',
-    applicabilityNotes: 'Todos los productos de temporada',
-    code: 'VERANO15',
-  },
-  {
-    id: 2,
-    name: 'Liquidación Zapatillas Deportivas',
-    type: 'fixed',
-    value: 25.50, // $25.50 off
-    startDate: '2024-06-15',
-    endDate: '2024-06-30',
-    applicabilityNotes: 'Solo zapatillas deportivas seleccionadas',
-    code: '',
-  },
-  {
-    id: 3,
-    name: 'Descuento Fin de Semana',
-    type: 'percentage',
-    value: 10,
-    startDate: new Date(new Date().setDate(new Date().getDate() - 5)).toISOString().slice(0,10), // Past
-    endDate: new Date(new Date().setDate(new Date().getDate() - 2)).toISOString().slice(0,10),   // Past
-    applicabilityNotes: 'Toda la tienda',
-    code: 'FINDE10',
-  }
-];
-
-const discountsList = ref(JSON.parse(JSON.stringify(initialDiscounts))); // Deep copy
-const showDiscountForm = ref(false);
+const discountStore = useDiscountStore();
+const showDiscountFormModal = ref(false);
 const isEditingDiscount = ref(false);
-const editingDiscountId = ref(null);
+const searchTerm = ref('');
+const currentPage = ref(1);
+const itemsPerPage = ref(10);
 
-const initialDiscountFormState = {
-  id: null,
-  name: '',
-  type: '',
-  value: 0,
-  startDate: new Date().toISOString().slice(0, 10),
-  endDate: new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().slice(0, 10), // Default to 1 week
-  applicabilityNotes: '',
-  code: '',
+const initialDiscountFormState = { /* ... as before ... */
+  id: null, name: '', type: '', value: 0, startDate: new Date().toISOString().slice(0, 10),
+  endDate: new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().slice(0, 10),
+  applicabilityNotes: '', code: '',
 };
 const discountForm = reactive({ ...initialDiscountFormState });
 
-const sortedDiscountsList = computed(() => {
-  return [...discountsList.value].sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
+const discountsList = computed(() => discountStore.discountsList);
+const filteredDiscountsList = computed(() => {
+    if (!searchTerm.value) return discountsList.value;
+    const lowerSearch = searchTerm.value.toLowerCase();
+    return discountsList.value.filter(d =>
+        d.name.toLowerCase().includes(lowerSearch) ||
+        (d.code && d.code.toLowerCase().includes(lowerSearch)) ||
+        (d.applicabilityNotes && d.applicabilityNotes.toLowerCase().includes(lowerSearch))
+    );
 });
 
-const formatDate = (dateString) => {
+const totalPages = computed(() => Math.ceil(filteredDiscountsList.value.length / itemsPerPage.value));
+const paginatedDiscounts = computed(() => {
+    if (totalPages.value > 0 && currentPage.value > totalPages.value) currentPage.value = totalPages.value;
+    const start = (currentPage.value - 1) * itemsPerPage.value;
+    const end = start + itemsPerPage.value;
+    return filteredDiscountsList.value.slice().sort((a,b) => new Date(b.startDate) - new Date(a.startDate)).slice(start, end);
+});
+const nextPage = () => { if (currentPage.value < totalPages.value) currentPage.value++; };
+const prevPage = () => { if (currentPage.value > 1) currentPage.value--; };
+
+
+const formatDate = (dateString) => { /* ... as before ... */
   if (!dateString) return 'N/A';
   const date = new Date(dateString);
-  // Ensure date is interpreted as local if no timezone specified, then output local string parts
-  const day = `0${date.getDate() +1}`.slice(-2); // +1 because of UTC interpretation of YYYY-MM-DD
-  const month = `0${date.getMonth() + 1}`.slice(-2);
-  const year = date.getFullYear();
+  const userTimezoneOffset = date.getTimezoneOffset() * 60000;
+  const localDate = new Date(date.getTime() + userTimezoneOffset);
+  const day = `0${localDate.getDate()}`.slice(-2);
+  const month = `0${localDate.getMonth() + 1}`.slice(-2);
+  const year = localDate.getFullYear();
   return `${day}/${month}/${year}`;
 };
-
-
-const isDiscountActive = (discount) => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0); // Normalize today to start of day
-  const startDate = new Date(discount.startDate);
-  const endDate = new Date(discount.endDate);
-  // Adjust start/end dates if they are simple YYYY-MM-DD strings to avoid timezone issues
-  startDate.setMinutes(startDate.getMinutes() + startDate.getTimezoneOffset());
-  endDate.setMinutes(endDate.getMinutes() + endDate.getTimezoneOffset());
-  endDate.setHours(23, 59, 59, 999); // Ensure endDate covers the entire day
-
+const isDiscountActive = (discount) => { /* ... as before ... */
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const startDate = new Date(discount.startDate); startDate.setMinutes(startDate.getMinutes() + startDate.getTimezoneOffset());
+  const endDate = new Date(discount.endDate); endDate.setMinutes(endDate.getMinutes() + endDate.getTimezoneOffset());
+  endDate.setHours(23, 59, 59, 999);
   return startDate <= today && today <= endDate;
 };
-
-const getDiscountStatus = (discount) => {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const startDate = new Date(discount.startDate);
-  const endDate = new Date(discount.endDate);
-  startDate.setMinutes(startDate.getMinutes() + startDate.getTimezoneOffset());
-  endDate.setMinutes(endDate.getMinutes() + endDate.getTimezoneOffset());
-  endDate.setHours(23, 59, 59, 999);
-
-
+const getDiscountStatusText = (discount) => { /* ... as before ... */
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const startDate = new Date(discount.startDate); startDate.setMinutes(startDate.getMinutes() + startDate.getTimezoneOffset());
   if (startDate > today) return 'Próximo';
   if (isDiscountActive(discount)) return 'Activo';
   return 'Expirado';
 };
+const getDiscountStatusClass = (discount) => { /* ... as before ... */
+    const status = getDiscountStatusText(discount);
+    if (status === 'Activo') return 'status-active';
+    if (status === 'Próximo') return 'status-upcoming';
+    return 'status-expired';
+};
 
-
-const resetDiscountForm = () => {
+const resetDiscountForm = () => { /* ... as before ... */
   Object.assign(discountForm, initialDiscountFormState);
   discountForm.startDate = new Date().toISOString().slice(0, 10);
   discountForm.endDate = new Date(new Date().setDate(new Date().getDate() + 7)).toISOString().slice(0, 10);
   isEditingDiscount.value = false;
-  editingDiscountId.value = null;
 };
+const showAddDiscountForm = () => { resetDiscountForm(); showDiscountFormModal.value = true; };
+const closeDiscountFormModal = () => { showDiscountFormModal.value = false; resetDiscountForm(); };
 
-const showAddDiscountForm = () => {
-  resetDiscountForm();
-  showDiscountForm.value = true;
-};
-
-const closeDiscountForm = () => {
-  showDiscountForm.value = false;
-  resetDiscountForm();
-};
-
-const saveDiscount = () => {
+const triggerSaveDiscount = () => { /* ... as before ... */
   if (!discountForm.name || !discountForm.type || discountForm.value <= 0 || !discountForm.startDate || !discountForm.endDate) {
-    alert('Por favor, complete todos los campos obligatorios del descuento (Nombre, Tipo, Valor, Fechas).');
-    return;
+    alert('Complete los campos obligatorios.'); return;
   }
   if (new Date(discountForm.endDate) < new Date(discountForm.startDate)) {
-    alert('La fecha de fin no puede ser anterior a la fecha de inicio.');
-    return;
+    alert('Fecha de fin no puede ser anterior a inicio.'); return;
   }
-
-  if (isEditingDiscount.value) {
-    // Update logic
-    const index = discountsList.value.findIndex(d => d.id === editingDiscountId.value);
-    if (index !== -1) {
-      discountsList.value[index] = { ...discountForm, id: editingDiscountId.value };
-    }
-  } else {
-    // Add new logic
-    const newDiscount = {
-      ...discountForm,
-      id: Date.now(), // Simple unique ID
-    };
-    discountsList.value.unshift(newDiscount);
-  }
-  closeDiscountForm();
+  if (isEditingDiscount.value) discountStore.updateDiscount({ ...discountForm });
+  else discountStore.addDiscount({ ...discountForm });
+  closeDiscountFormModal();
 };
-
-const showEditDiscountForm = (discount) => {
-  Object.assign(discountForm, discount);
-  isEditingDiscount.value = true;
-  editingDiscountId.value = discount.id;
-  showDiscountForm.value = true;
+const showEditDiscountForm = (discount) => { /* ... as before ... */
+  Object.assign(discountForm, JSON.parse(JSON.stringify(discount)));
+  isEditingDiscount.value = true; showDiscountFormModal.value = true;
 };
-
-const deleteDiscount = (discountId) => {
-  if (window.confirm('¿Está seguro de que desea eliminar este descuento?')) {
-    discountsList.value = discountsList.value.filter(d => d.id !== discountId);
+const triggerDeleteDiscount = (discountId) => { /* ... as before ... */
+  if (window.confirm('¿Seguro?')) {
+    discountStore.deleteDiscount(discountId);
+    if (currentPage.value > totalPages.value && totalPages.value > 0) currentPage.value = totalPages.value;
   }
 };
-
+const truncateText = (text, length) => {
+  if (text && text.length > length) return text.substring(0, length) + '...';
+  return text || '-';
+};
 </script>
 
 <style scoped>
-.descuentos-view {
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+/* .descuentos-view { padding: 20px; } */ /* Applied by .card-base */
+
+.view-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 1.5rem; flex-wrap: wrap; gap: 1rem;
+}
+.view-header h2 { margin: 0; color: var(--text-dark); }
+@media (prefers-color-scheme: dark) {
+  .view-header h2 { color: var(--dm-text-dark); }
 }
 
-.actions-container {
-  display: flex;
-  justify-content: flex-start; /* Align button to the left */
-  margin-bottom: 10px; /* Add some space below the button */
+.modal-close-button {
+  background: none; border: none; font-size: 1.75rem; line-height: 1;
+  color: var(--text-muted); cursor: pointer; padding: 0.5rem;
+  position: absolute; top: 10px; right: 15px;
 }
-
-.action-button {
-  padding: 10px 18px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1em;
-  transition: background-color 0.2s ease;
-}
-
-.add-button {
-  background-color: #007bff; /* Blue */
-  color: white;
-}
-.add-button:hover {
-  background-color: #0056b3;
-}
-
-/* Modal styles (similar to previous views) */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.6);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background-color: white;
-  padding: 25px;
-  border-radius: 8px;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-  width: 90%;
-  max-width: 650px; /* Adjusted for discount form */
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.modal-content h2 {
-  margin-top: 0;
-  margin-bottom: 20px;
-  color: #333;
-  border-bottom: 1px solid #eee;
-  padding-bottom: 10px;
-}
-
-.form-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 15px 20px; /* Row and column gap */
-  margin-bottom: 20px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-}
-.form-group.full-width {
-  grid-column: 1 / -1; /* Make textarea span full width */
-}
-
-.form-group label {
-  margin-bottom: 5px;
-  font-weight: bold;
-  font-size: 0.9em;
-  color: #555;
-}
-
-.form-group input[type="text"],
-.form-group input[type="number"],
-.form-group input[type="date"],
-.form-group select,
-.form-group textarea {
-  width: 100%;
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  box-sizing: border-box;
-  font-size: 0.95em;
-}
-.form-group small {
-  font-size: 0.8em;
-  color: #666;
-  margin-top: 3px;
+.modal-close-button:hover { color: var(--text-dark); }
+@media (prefers-color-scheme: dark) {
+  .modal-close-button { color: var(--dm-text-dark); opacity: 0.7; }
+  .modal-close-button:hover { opacity: 1; }
 }
 
 .form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 20px;
+  display: flex; justify-content: flex-end; gap: 0.75rem;
+  margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);
+}
+@media (prefers-color-scheme: dark) {
+  .form-actions { border-top-color: var(--dm-border-color); }
 }
 
-.action-button.primary {
-  background-color: #28a745; /* Green */
-  color: white;
+.table-container { margin-top: 1rem; }
+.table-header-controls {
+  margin-bottom: 1rem; display: flex; justify-content: space-between; align-items: center;
 }
-.action-button.primary:hover {
-  background-color: #1e7e34;
-}
+.search-input { min-width: 280px; max-width: 400px; }
 
-.action-button.secondary {
-  background-color: #6c757d; /* Gray */
-  color: white;
-}
-.action-button.secondary:hover {
-  background-color: #545b62;
-}
+.discounts-table .actions-cell { text-align: right; white-space: nowrap; }
+.discounts-table .actions-cell .action-button { margin-left: 0.5rem; }
+.notes-cell { max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: help; }
+.no-results-message { text-align: center; padding: 1.5rem; color: var(--text-muted); font-style: italic; }
 
-/* Table styles */
-.discounts-table-container {
-  margin-top: 10px; /* Reduced margin as actions-container has margin-bottom */
-  background-color: #fff;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-  overflow-x: auto;
-}
-.discounts-table-container h3 {
-    margin-top: 0;
-    margin-bottom: 15px;
-}
-
-.discounts-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.discounts-table th,
-.discounts-table td {
-  border: 1px solid #dee2e6;
-  padding: 10px 12px;
-  text-align: left;
-  font-size: 0.9em;
-  vertical-align: middle;
-}
-
-.discounts-table th {
-  background-color: #f8f9fa;
-  font-weight: bold;
-  color: #495057;
-}
-
-.discounts-table tbody tr:nth-child(even) {
-  background-color: #f9f9f9;
-}
-.discounts-table tbody tr:hover {
-  background-color: #f1f1f1;
-}
-.discounts-table tr.inactive-discount {
-  background-color: #f8f9fa; /* Light grey for inactive */
-  color: #6c757d; /* Muted text color */
-}
-.discounts-table tr.inactive-discount .status-inactive {
-  color: #dc3545; /* Red for expired/upcoming */
+.row-inactive { background-color: #fcfcfc; } /* Subtle for expired */
+.row-inactive td { color: var(--text-muted); }
+.row-upcoming { background-color: #fffaf0; } /* Light yellow for upcoming */
+@media (prefers-color-scheme: dark) {
+    .row-inactive { background-color: #2a2e32; }
+    .row-inactive td { color: var(--dm-text-dark); opacity: 0.6; }
+    .row-upcoming { background-color: #332e22; }
 }
 
 
-.no-discounts td {
+.status-badge {
+  padding: 0.25em 0.6em;
+  font-size: 0.75em;
+  font-weight: 700;
+  line-height: 1;
   text-align: center;
-  padding: 20px;
-  color: #6c757d;
-  font-style: italic;
+  white-space: nowrap;
+  vertical-align: baseline;
+  border-radius: 0.375rem; /* var(--border-radius-base) */
+  color: var(--text-light);
 }
-
-.status-active {
-  color: #28a745; /* Green */
-  font-weight: bold;
-}
-.status-inactive {
-  color: #ffc107; /* Orange for upcoming */
-  font-weight: bold;
-}
-.discounts-table tr.inactive-discount .status-inactive {
-  color: #dc3545; /* Red for expired */
-}
+.status-active { background-color: var(--success-color); }
+.status-upcoming { background-color: var(--warning-color); color: var(--text-dark); } /* Text dark for yellow */
+.status-expired { background-color: var(--secondary-color); }
 
 
-.action-button.edit-button {
-  background-color: #ffc107; /* Yellow */
-  color: #212529;
-  margin-right: 5px;
-  font-size: 0.85em;
-  padding: 6px 10px;
+.pagination-controls {
+  margin-top: 1.5rem; text-align: center; display: flex;
+  justify-content: center; align-items: center; gap: 0.5rem;
 }
-.action-button.edit-button:hover {
-  background-color: #e0a800;
+.pagination-controls span { font-size: 0.9em; color: var(--text-muted); }
+@media (prefers-color-scheme: dark) {
+  .pagination-controls span { color: var(--dm-text-dark); opacity: 0.8;}
 }
 
-.action-button.delete-button {
-  background-color: #dc3545; /* Red */
-  color: white;
-  font-size: 0.85em;
-  padding: 6px 10px;
-}
-.action-button.delete-button:hover {
-  background-color: #c82333;
-}
+/* Specific button styles */
+.primary-button { background-color: var(--primary-color); border-color: var(--primary-color); color: var(--text-light); }
+.primary-button:hover { background-color: #0056b3; border-color: #0052a9; }
+.secondary-button { background-color: var(--secondary-color); border-color: var(--secondary-color); color: var(--text-light); }
+.secondary-button:hover { background-color: #545b62; border-color: #4e555b; }
+.success-button { background-color: var(--success-color); border-color: var(--success-color); color: var(--text-light); }
+.success-button:hover { background-color: #1e7e34; border-color: #1c7430;}
+.danger-button { background-color: var(--danger-color); border-color: var(--danger-color); color: var(--text-light); }
+.danger-button:hover { background-color: #b02a37; border-color: #a52834;}
+.warning-button { background-color: var(--warning-color); border-color: var(--warning-color); color: var(--text-dark); }
+.warning-button:hover { background-color: #d39e00; border-color: #c69500;}
+
+.btn-sm { padding: 0.35rem 0.6rem; font-size: 0.8em; }
+
+/* Icons */
+[class^="icon-"]::before { display: inline-block; margin-right: 0.4em; }
+.icon-add::before { content: '+'; font-weight: bold; }
+.icon-edit::before { content: '✎'; }
+.icon-delete::before { content: '🗑️'; }
 </style>

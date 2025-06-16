@@ -1,79 +1,308 @@
+/* Global Styles */
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+  /* Color Palette */
+  --primary-color: #007bff;
+  --secondary-color: #6c757d;
+  --accent-color: #17a2b8; /* Teal/Info */
+  --success-color: #28a745;
+  --danger-color: #dc3545;
+  --warning-color: #ffc107;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  --text-dark: #212529;
+  --text-light: #f8f9fa;
+  --text-muted: #6c757d;
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
+  --bg-main: #f4f6f9;
+  --bg-card: #ffffff;
+  --bg-dark: #343a40; /* For dark elements like sidebar */
+  --bg-light: #f8f9fa; /* For light backgrounds like table headers */
+
+  --border-color: #dee2e6;
+  --border-radius-base: 0.375rem; /* Bootstrap's default is 0.375rem (6px) */
+  --box-shadow-sm: 0 .125rem .25rem rgba(0,0,0,.075);
+  --box-shadow: 0 .5rem 1rem rgba(0,0,0,.15);
+
+  /* Font */
+  --font-family-sans-serif: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-family-monospace: SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --base-font-size: 1rem; /* 16px */
+  --line-height-base: 1.6;
+
+  /* Dark mode variables (overridden by @media prefers-color-scheme: dark) */
+  --dm-text-dark: #dee2e6;
+  --dm-text-light: #343a40;
+  --dm-bg-main: #212529;
+  --dm-bg-card: #2c3034;
+  --dm-border-color: #495057;
+}
+
+/* Light mode (default) */
+body {
+  font-family: var(--font-family-sans-serif);
+  font-size: var(--base-font-size);
+  line-height: var(--line-height-base);
+  background-color: var(--bg-main);
+  color: var(--text-dark);
+  margin: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Dark Mode */
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: var(--dm-bg-main);
+    color: var(--dm-text-dark);
+  }
+  /* Add other dark mode specific overrides here for global elements */
+  /* For example, default link colors in dark mode */
+  a { color: var(--primary-color); } /* Keep primary for links or choose a lighter blue */
+  a:hover { color: #4dabf7; } /* Lighter blue for hover in dark mode */
+
+  /* Update component-specific dark mode styles within their <style scoped> or here if global */
+}
+
+
+/* General HTML Elements */
+#app {
+  /* max-width: 1280px; */ /* Removing max-width for full-width dashboard */
+  /* margin: 0 auto; */ /* No longer centered */
+  /* padding: 2rem; */ /* Padding will be handled by layout/views */
+  /* text-align: center; */ /* Resetting to default left align */
+  width: 100%;
+  min-height: 100vh;
+  display: flex; /* For some layouts if #app is the main container */
+  flex-direction: column;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  margin-top: 0;
+  margin-bottom: 0.75rem;
+  font-weight: 600; /* Bolder headings */
+  line-height: 1.2;
+  color: var(--text-dark);
+}
+@media (prefers-color-scheme: dark) {
+  h1, h2, h3, h4, h5, h6 { color: var(--dm-text-dark); }
+}
+
+
+p {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
 a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
+  color: var(--primary-color);
+  text-decoration: none; /* Remove underline by default */
+  transition: color 0.15s ease-in-out;
 }
 a:hover {
-  color: #535bf2;
+  color: #0056b3; /* Darker primary */
+  text-decoration: underline;
 }
 
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
-}
-
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
-
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
+/* Basic Button Styling (can be overridden by component styles) */
+button, .action-button { /* Apply to .action-button as well for consistency */
+  display: inline-block;
   font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
+  line-height: var(--line-height-base);
+  color: var(--text-light);
+  text-align: center;
+  vertical-align: middle;
   cursor: pointer;
-  transition: border-color 0.25s;
+  user-select: none;
+  background-color: var(--primary-color);
+  border: 1px solid var(--primary-color);
+  padding: 0.5rem 1rem; /* Adjusted padding */
+  font-size: 0.95rem; /* Slightly smaller base button font */
+  border-radius: var(--border-radius-base);
+  transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out, border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
 }
-button:hover {
-  border-color: #646cff;
+button:hover, .action-button:hover {
+  background-color: #0056b3;
+  border-color: #0052a9;
 }
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+button:focus, .action-button:focus {
+  outline: 0;
+  box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.5); /* Focus ring */
+}
+button:disabled, .action-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
-.card {
-  padding: 2em;
+/* Common Form Input Styling */
+input[type="text"],
+input[type="password"],
+input[type="email"],
+input[type="number"],
+input[type="date"],
+input[type="tel"],
+select,
+textarea {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.75rem; /* Adjusted padding */
+  font-size: 0.95rem;
+  font-weight: 400;
+  line-height: var(--line-height-base);
+  color: var(--text-dark);
+  background-color: var(--bg-card); /* White background for inputs */
+  background-clip: padding-box;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-base);
+  box-shadow: var(--box-shadow-sm);
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+  box-sizing: border-box; /* Ensure padding and border don't increase width */
+}
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="email"]:focus,
+input[type="number"]:focus,
+input[type="date"]:focus,
+input[type="tel"]:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--primary-color);
+  outline: 0;
+  box-shadow: 0 0 0 0.2rem rgba(0,123,255,.25);
+}
+@media (prefers-color-scheme: dark) {
+  input, select, textarea {
+    background-color: var(--dm-bg-card);
+    color: var(--dm-text-dark);
+    border-color: var(--dm-border-color);
+  }
+}
+
+
+/* Basic Table Styling */
+.app-table { /* Use this class for consistent table styling */
+  width: 100%;
+  margin-bottom: 1rem;
+  color: var(--text-dark);
+  border-collapse: collapse;
+  background-color: var(--bg-card); /* Card background for tables */
+  box-shadow: var(--box-shadow-sm);
+  border-radius: var(--border-radius-base);
+  overflow: hidden; /* To make border-radius work on table */
+}
+.app-table th,
+.app-table td {
+  padding: 0.75rem 1rem; /* Consistent padding */
+  vertical-align: top;
+  border-top: 1px solid var(--border-color);
+}
+.app-table thead th {
+  vertical-align: bottom;
+  border-bottom: 2px solid var(--border-color);
+  background-color: var(--bg-light); /* Light header for tables */
+  font-weight: 600;
+}
+.app-table tbody tr:nth-of-type(odd) {
+  /* background-color: rgba(0,0,0,.03); */ /* Subtle striping if desired */
+}
+.app-table tbody tr:hover {
+  background-color: rgba(0,123,255,.075); /* Primary color tint on hover */
+}
+@media (prefers-color-scheme: dark) {
+  .app-table { color: var(--dm-text-dark); background-color: var(--dm-bg-card); }
+  .app-table th, .app-table td { border-top-color: var(--dm-border-color); }
+  .app-table thead th { border-bottom-color: var(--dm-border-color); background-color: #3a3f44; } /* Darker header */
+   .app-table tbody tr:hover { background-color: rgba(0,123,255,.15); }
+}
+
+/* Utility Classes */
+.text-center { text-align: center !important; }
+.mb-1 { margin-bottom: 0.25rem !important; }
+.mb-2 { margin-bottom: 0.5rem !important; }
+.mb-3 { margin-bottom: 1rem !important; }
+.mt-1 { margin-top: 0.25rem !important; }
+.mt-2 { margin-top: 0.5rem !important; }
+.mt-3 { margin-top: 1rem !important; }
+
+/* Card styling (can be applied to views or sections) */
+.card-base {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-base);
+  box-shadow: var(--box-shadow-sm);
+  padding: 1.5rem; /* Default padding for cards */
+}
+@media (prefers-color-scheme: dark) {
+  .card-base {
+    background-color: var(--dm-bg-card);
+    border-color: var(--dm-border-color);
+  }
+}
+
+/* Global Modal Styling (basic overlay and content box) */
+.modal-overlay-global {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.55); /* Darker overlay */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000; /* Ensure it's on top */
+  padding: 15px; /* Padding for smaller screens */
+}
+
+.modal-content-global {
+  background-color: var(--bg-card);
+  padding: 20px 25px;
+  border-radius: var(--border-radius-base);
+  box-shadow: var(--box-shadow);
+  width: 95%;
+  max-width: 600px; /* Default max-width */
+  max-height: 90vh;
+  overflow-y: auto;
+  position: relative; /* For potential close button positioning */
+}
+@media (prefers-color-scheme: dark) {
+  .modal-content-global {
+    background-color: var(--dm-bg-card);
+  }
+}
+.modal-header-global {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 0.75rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+}
+.modal-header-global h2, .modal-header-global h3 {
+  margin-bottom: 0;
+}
+@media (prefers-color-scheme: dark) {
+  .modal-header-global { border-bottom-color: var(--dm-border-color); }
+}
+/* Remove Bootstrap specific classes like .card, #app default centering */
+/* The old :root styles for color-scheme light/dark are simplified */
+/* and dark mode is primarily handled by @media query now */
+/* Removed old button styles to use the new .action-button or default button style */
+/* Removed old #app styling as it's now full width for dashboard */
+/* body display:flex, place-items:center might be too specific for general use, removed. */
+/* Default h1 line-height changed */
+
+/* Ensure that the root element takes up full height for sticky footers or full-page layouts if needed */
+html, body, #app {
+  height: 100%;
+}
+body {
+    display: block; /* Override previous flex settings if any */
+    place-items: initial; /* Override */
+    min-width: initial; /* Override */
 }
 
 #app {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+    max-width: initial; /* Override */
+    margin: 0; /* Override */
+    padding: 0; /* Override */
+    text-align: left; /* Override */
 }

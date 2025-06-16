@@ -1,18 +1,29 @@
 <template>
-  <div class="productos-view">
-    <div class="actions-container">
-      <button @click="showAddProductForm" class="action-button add-button">Agregar Nuevo Producto</button>
-      <div class="barcode-reader-placeholder">
-        <input type="text" v-model="barcodeScanInput" placeholder="Escanear o ingresar código...">
-        <button @click="scanBarcode" class="action-button scan-button">Lector SI</button>
+  <div class="productos-view card-base"> <!-- Apply card-base for consistent view background/padding -->
+    <div class="view-header">
+      <h2>Gestión de Productos</h2>
+      <div class="actions-container">
+        <button @click="showAddProductForm" class="action-button success-button">
+          <i class="icon-add"></i> Agregar Producto
+        </button>
+         <div class="barcode-reader-placeholder">
+          <input type="text" v-model="barcodeScanInput" @keyup.enter="scanBarcode" placeholder="Escanear o ingresar código...">
+          <button @click="scanBarcode" class="action-button info-button">
+            <i class="icon-barcode"></i> Lector SI
+          </button>
+        </div>
       </div>
     </div>
 
+
     <!-- Add/Edit Product Form Modal -->
-    <div v-if="showForm" class="modal-overlay">
-      <div class="modal-content">
-        <h2>{{ isEditing ? 'Editar Producto' : 'Agregar Nuevo Producto' }}</h2>
-        <form @submit.prevent="isEditing ? updateProduct() : addProduct()">
+    <div v-if="showForm" class="modal-overlay-global"> <!-- Use global modal style -->
+      <div class="modal-content-global" style="max-width: 750px;"> <!-- Global modal style, specific max-width -->
+        <div class="modal-header-global">
+          <h3>{{ isEditing ? 'Editar Producto' : 'Agregar Nuevo Producto' }}</h3>
+          <button @click="closeForm" class="modal-close-button">&times;</button>
+        </div>
+        <form @submit.prevent="isEditing ? triggerUpdateProduct() : triggerAddProduct()">
           <div class="form-grid">
             <div class="form-group">
               <label for="brand">Marca:</label>
@@ -64,17 +75,20 @@
             </div>
           </div>
           <div class="form-actions">
-            <button type="submit" class="action-button primary">{{ isEditing ? 'Actualizar' : 'Agregar' }}</button>
-            <button type="button" @click="closeForm" class="action-button secondary">Cancelar</button>
+            <button type="button" @click="closeForm" class="action-button secondary-button">Cancelar</button>
+            <button type="submit" class="action-button primary-button">{{ isEditing ? 'Actualizar' : 'Agregar' }}</button>
           </div>
         </form>
       </div>
     </div>
 
     <!-- Products Table -->
-    <div class="products-table-container">
-      <h3>Listado de Productos</h3>
-      <table class="products-table">
+    <div class="table-container"> <!-- Renamed for clarity -->
+      <div class="table-header-controls">
+        <input type="text" v-model="searchTerm" placeholder="Buscar producto (E-code, Marca, Estilo...)" class="search-input">
+        <!-- Add other controls like filters if needed -->
+      </div>
+      <table class="app-table"> <!-- Use global app-table style -->
         <thead>
           <tr>
             <th>E-code</th>
@@ -88,338 +102,250 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-if="productsList.length === 0">
-            <td colspan="8" class="no-products">No hay productos para mostrar.</td>
+          <tr v-if="paginatedProducts.length === 0">
+            <td colspan="8" class="no-results-message">{{ filteredProductsList.length === 0 && searchTerm ? 'No hay productos que coincidan con la búsqueda.' : 'No hay productos para mostrar. Agregue uno para comenzar.' }}</td>
           </tr>
-          <tr v-for="product in productsList" :key="product.id">
-            <td>{{ product.ecode }}</td>
-            <td>{{ product.brand }}</td>
-            <td>{{ product.style }}</td>
-            <td>{{ product.color }}</td>
-            <td>{{ product.size }}</td>
-            <td>{{ product.stock }}</td>
-            <td>${{ product.price1 }}</td>
-            <td>
-              <button @click="showEditProductForm(product)" class="action-button edit-button">Editar</button>
-              <button @click="deleteProduct(product.id)" class="action-button delete-button">Eliminar</button>
+          <tr v-for="product in paginatedProducts" :key="product.id">
+            <td data-label="E-code">{{ product.ecode }}</td>
+            <td data-label="Marca">{{ product.brand }}</td>
+            <td data-label="Estilo">{{ product.style }}</td>
+            <td data-label="Color">{{ product.color }}</td>
+            <td data-label="Talla">{{ product.size }}</td>
+            <td data-label="Stock">{{ product.stock }}</td>
+            <td data-label="Precio 1">${{ product.price1 ? product.price1.toFixed(2) : '0.00' }}</td>
+            <td data-label="Acciones" class="actions-cell">
+              <button @click="showEditProductForm(product)" class="action-button warning-button btn-sm">
+                <i class="icon-edit"></i> Editar
+              </button>
+              <button @click="triggerDeleteProduct(product.id)" class="action-button danger-button btn-sm">
+                <i class="icon-delete"></i> Eliminar
+              </button>
             </td>
           </tr>
         </tbody>
       </table>
+       <div class="pagination-controls" v-if="totalPages > 1">
+        <button @click="prevPage" :disabled="currentPage === 1" class="action-button secondary-button btn-sm">Anterior</button>
+        <span>Página {{ currentPage }} de {{ totalPages }}</span>
+        <button @click="nextPage" :disabled="currentPage === totalPages" class="action-button secondary-button btn-sm">Siguiente</button>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue';
-import { mockProducts as initialMockProducts } from '../data/mockProducts.js'; // Import mock data
+// Script remains largely the same, ensure Pinia store usage is correct
+import { ref, reactive, computed } from 'vue';
+import { useProductStore } from '@/stores/productStore.js';
 
-const productsList = ref([]);
+const productStore = useProductStore();
 const showForm = ref(false);
 const isEditing = ref(false);
-const editingProductId = ref(null);
 const barcodeScanInput = ref('');
+const searchTerm = ref('');
+const currentPage = ref(1);
+const itemsPerPage = ref(10);
 
-const initialFormState = {
-  id: null,
-  brand: '',
-  style: '',
-  color: '',
-  size: '',
-  ecode: '',
-  stock: 0,
-  price1: 0,
-  price1_description: 'Precio de lista',
-  price2: 0,
-  price2_description: 'Precio de oferta',
-  lastAuthPrice: 0,
-  lastAuthPrice_description: 'Precio mayoreo',
+const initialFormState = { /* ... as before ... */
+  id: null, brand: '', style: '', color: '', size: '', ecode: '', stock: 0,
+  price1: 0, price1_description: 'Precio de lista', price2: 0, price2_description: 'Precio de oferta',
+  lastAuthPrice: 0, lastAuthPrice_description: 'Precio mayoreo',
 };
-
 const productForm = reactive({ ...initialFormState });
 
-onMounted(() => {
-  // Deep copy mockProducts to avoid modifying the original array if it's used elsewhere
-  productsList.value = JSON.parse(JSON.stringify(initialMockProducts));
+const productsList = computed(() => productStore.products);
+const filteredProductsList = computed(() => {
+  if (!searchTerm.value) return productsList.value;
+  const lowerSearchTerm = searchTerm.value.toLowerCase();
+  return productsList.value.filter(product =>
+    Object.values(product).some(val =>
+      String(val).toLowerCase().includes(lowerSearchTerm)
+    )
+  );
 });
 
-const resetForm = () => {
-  Object.assign(productForm, initialFormState);
-  isEditing.value = false;
-  editingProductId.value = null;
-};
+const totalPages = computed(() => Math.ceil(filteredProductsList.value.length / itemsPerPage.value));
+const paginatedProducts = computed(() => {
+  if (totalPages.value > 0 && currentPage.value > totalPages.value) currentPage.value = totalPages.value;
+  const start = (currentPage.value - 1) * itemsPerPage.value;
+  const end = start + itemsPerPage.value;
+  // Sort by ecode by default or make it configurable
+  return filteredProductsList.value.slice().sort((a,b) => a.ecode.localeCompare(b.ecode)).slice(start, end);
+});
 
-const closeForm = () => {
-  showForm.value = false;
-  resetForm();
-};
+const nextPage = () => { if (currentPage.value < totalPages.value) currentPage.value++; };
+const prevPage = () => { if (currentPage.value > 1) currentPage.value--; };
 
-const showAddProductForm = () => {
-  resetForm();
-  showForm.value = true;
-};
+const resetForm = () => { Object.assign(productForm, initialFormState); isEditing.value = false; };
+const closeForm = () => { showForm.value = false; resetForm(); };
+const showAddProductForm = () => { resetForm(); showForm.value = true; };
 
-const addProduct = () => {
+const triggerAddProduct = () => {
   if (!productForm.brand || !productForm.style || !productForm.ecode) {
-    alert('Marca, Estilo, y E-code son campos requeridos.');
-    return;
+    alert('Marca, Estilo, y E-code son campos requeridos.'); return;
   }
-  const newProduct = {
-    ...productForm,
-    id: Date.now(), // Simple unique ID for mock
-  };
-  productsList.value.unshift(newProduct); // Add to the beginning of the list
-  closeForm();
+  productStore.addProduct({ ...productForm }); closeForm();
 };
-
 const showEditProductForm = (product) => {
-  Object.assign(productForm, product); // Copy product data to form
-  isEditing.value = true;
-  editingProductId.value = product.id;
-  showForm.value = true;
+  Object.assign(productForm, JSON.parse(JSON.stringify(product)));
+  isEditing.value = true; showForm.value = true;
 };
-
-const updateProduct = () => {
+const triggerUpdateProduct = () => {
   if (!productForm.brand || !productForm.style || !productForm.ecode) {
-    alert('Marca, Estilo, y E-code son campos requeridos.');
-    return;
+    alert('Marca, Estilo, y E-code son campos requeridos.'); return;
   }
-  const index = productsList.value.findIndex(p => p.id === editingProductId.value);
-  if (index !== -1) {
-    productsList.value[index] = { ...productForm }; // Update product
-  }
-  closeForm();
+  productStore.updateProduct({ ...productForm }); closeForm();
 };
-
-const deleteProduct = (productId) => {
-  if (window.confirm('¿Está seguro de que desea eliminar este producto?')) {
-    productsList.value = productsList.value.filter(p => p.id !== productId);
+const triggerDeleteProduct = (productId) => {
+  if (window.confirm('¿Está seguro?')) {
+    productStore.deleteProduct(productId);
+    if (currentPage.value > totalPages.value && totalPages.value > 0) currentPage.value = totalPages.value;
   }
 };
-
 const scanBarcode = () => {
-  if (barcodeScanInput.value) {
-    console.log("Barcode scanned/entered:", barcodeScanInput.value);
-    // Potentially search for the product or populate a field
-    const foundProduct = productsList.value.find(p => p.ecode === barcodeScanInput.value);
-    if (foundProduct) {
-      showEditProductForm(foundProduct); // Open edit form if product found by ecode
-    } else {
-      alert(`Producto con E-code "${barcodeScanInput.value}" no encontrado. Puede agregarlo.`);
-      // Optionally pre-fill ecode in add new product form
-      resetForm();
-      productForm.ecode = barcodeScanInput.value;
-      showForm.value = true;
-    }
-    barcodeScanInput.value = ''; // Clear input after scan
-  } else {
-    console.log("Barcode scanning initiated (Lector SI)... Awaiting input.");
-    // In a real scenario, this might integrate with a hardware scanner API
-    // or focus the input field.
-    alert("Por favor, ingrese o escanee un código de barras en el campo de texto.");
+  if (!barcodeScanInput.value) { alert("Ingrese un código."); return; }
+  const found = productStore.products.find(p => p.ecode === barcodeScanInput.value);
+  if (found) showEditProductForm(found);
+  else {
+    alert(`Producto con E-code "${barcodeScanInput.value}" no encontrado.`);
+    resetForm(); productForm.ecode = barcodeScanInput.value; showForm.value = true;
   }
+  barcodeScanInput.value = '';
 };
-
 </script>
 
 <style scoped>
-.productos-view {
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
+/* Using card-base from global styles for the main view container */
+/* .productos-view { padding: 20px; } already in .card-base */
 
-.actions-container {
+.view-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 20px; /* Gap between add button and barcode section */
-  flex-wrap: wrap; /* Allow wrapping on smaller screens */
+  margin-bottom: 1.5rem; /* More space */
+  flex-wrap: wrap; /* Wrap for smaller screens */
+  gap: 1rem;
+}
+.view-header h2 {
+  margin: 0; /* Remove default margin */
+  color: var(--text-dark);
+}
+@media (prefers-color-scheme: dark) {
+  .view-header h2 { color: var(--dm-text-dark); }
 }
 
-.barcode-reader-placeholder {
+
+.actions-container {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 1rem; /* Space between buttons/inputs in this container */
+  flex-wrap: wrap;
 }
 
+.barcode-reader-placeholder { display: flex; align-items: center; gap: 0.5rem; }
 .barcode-reader-placeholder input[type="text"] {
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  min-width: 200px; /* Ensure input is adequately sized */
+  /* padding: 0.5rem 0.75rem; */ /* Global style */
+  min-width: 180px;
 }
 
-.action-button {
-  padding: 10px 15px;
+/* Modal Close Button (Example, if not globally defined) */
+.modal-close-button {
+  background: none;
   border: none;
-  border-radius: 4px;
+  font-size: 1.75rem;
+  line-height: 1;
+  color: var(--text-muted);
   cursor: pointer;
-  font-size: 1em;
-  transition: background-color 0.2s ease;
+  padding: 0.5rem;
+  position: absolute;
+  top: 10px;
+  right: 15px;
 }
-
-.add-button {
-  background-color: #007bff; /* Blue */
-  color: white;
-}
-.add-button:hover {
-  background-color: #0056b3;
-}
-
-.scan-button {
-  background-color: #17a2b8; /* Teal */
-  color: white;
-}
-.scan-button:hover {
-  background-color: #117a8b;
+.modal-close-button:hover { color: var(--text-dark); }
+@media (prefers-color-scheme: dark) {
+  .modal-close-button { color: var(--dm-text-dark); opacity: 0.7; }
+  .modal-close-button:hover { opacity: 1; }
 }
 
 
-/* Modal styles */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.6);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000; /* Ensure modal is on top */
-}
-
-.modal-content {
-  background-color: white;
-  padding: 25px;
-  border-radius: 8px;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-  width: 90%;
-  max-width: 700px; /* Max width for the form */
-  max-height: 90vh; /* Max height */
-  overflow-y: auto; /* Allow scrolling within the modal */
-}
-
-.modal-content h2 {
-  margin-top: 0;
-  margin-bottom: 20px;
-  color: #333;
-  border-bottom: 1px solid #eee;
-  padding-bottom: 10px;
-}
-
-.form-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); /* Responsive grid */
-  gap: 15px;
-  margin-bottom: 20px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-}
-
-.form-group label {
-  margin-bottom: 5px;
-  font-weight: bold;
-  font-size: 0.9em;
-  color: #555;
-}
-
-.form-group input[type="text"],
-.form-group input[type="number"],
-.form-group select {
-  width: 100%;
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  box-sizing: border-box;
-}
-
+.form-grid { /* Using global styles for form elements */ }
+.form-group { /* Using global styles */ }
 .form-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
-  margin-top: 20px;
+  gap: 0.75rem; /* Space between form action buttons */
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-color);
+}
+@media (prefers-color-scheme: dark) {
+  .form-actions { border-top-color: var(--dm-border-color); }
 }
 
-.action-button.primary {
-  background-color: #28a745; /* Green */
-  color: white;
+
+/* Table styling */
+.table-container { margin-top: 1rem; }
+.table-header-controls {
+  margin-bottom: 1rem;
+  display: flex;
+  justify-content: space-between; /* Or flex-start if only search is present */
+  align-items: center;
 }
-.action-button.primary:hover {
-  background-color: #1e7e34;
+.search-input {
+  /* padding: 0.5rem 0.75rem; */ /* Global style */
+  min-width: 280px; /* Wider search input */
+  max-width: 400px;
 }
 
-.action-button.secondary {
-  background-color: #6c757d; /* Gray */
-  color: white;
-}
-.action-button.secondary:hover {
-  background-color: #545b62;
-}
+/* .app-table is defined globally */
+.actions-cell { text-align: right; white-space: nowrap;}
+.actions-cell .action-button { margin-left: 0.5rem; } /* Space between edit/delete */
+.no-results-message { text-align: center; padding: 1.5rem; color: var(--text-muted); font-style: italic; }
 
-/* Table styles */
-.products-table-container {
-  margin-top: 20px;
-  overflow-x: auto; /* Allow horizontal scrolling for table on small screens */
-}
-.products-table-container h3 {
-    margin-bottom: 15px;
-}
-
-.products-table {
-  width: 100%;
-  border-collapse: collapse;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-
-.products-table th,
-.products-table td {
-  border: 1px solid #dee2e6;
-  padding: 10px 12px; /* Increased padding */
-  text-align: left;
-  font-size: 0.95em;
-}
-
-.products-table th {
-  background-color: #f8f9fa;
-  font-weight: bold;
-  color: #495057;
-}
-
-.products-table tbody tr:nth-child(even) {
-  background-color: #f2f2f2;
-}
-
-.products-table tbody tr:hover {
-  background-color: #e9ecef;
-}
-
-.no-products td {
+/* Pagination styling */
+.pagination-controls {
+  margin-top: 1.5rem;
   text-align: center;
-  padding: 20px;
-  color: #6c757d;
-  font-style: italic;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+}
+.pagination-controls span { font-size: 0.9em; color: var(--text-muted); }
+@media (prefers-color-scheme: dark) {
+  .pagination-controls span { color: var(--dm-text-dark); opacity: 0.8;}
 }
 
-.action-button.edit-button {
-  background-color: #ffc107; /* Yellow */
-  color: #212529;
-  margin-right: 5px;
-}
-.action-button.edit-button:hover {
-  background-color: #d39e00;
+
+/* Specific button styles using CSS variables */
+.primary-button { background-color: var(--primary-color); border-color: var(--primary-color); color: var(--text-light); }
+.primary-button:hover { background-color: #0056b3; border-color: #0052a9; }
+.secondary-button { background-color: var(--secondary-color); border-color: var(--secondary-color); color: var(--text-light); }
+.secondary-button:hover { background-color: #545b62; border-color: #4e555b; }
+.success-button { background-color: var(--success-color); border-color: var(--success-color); color: var(--text-light); }
+.success-button:hover { background-color: #1e7e34; border-color: #1c7430;}
+.danger-button { background-color: var(--danger-color); border-color: var(--danger-color); color: var(--text-light); }
+.danger-button:hover { background-color: #b02a37; border-color: #a52834;}
+.warning-button { background-color: var(--warning-color); border-color: var(--warning-color); color: var(--text-dark); } /* Text dark for yellow bg */
+.warning-button:hover { background-color: #d39e00; border-color: #c69500;}
+.info-button { background-color: var(--accent-color); border-color: var(--accent-color); color: var(--text-light); }
+.info-button:hover { background-color: #0f788a; border-color: #0e6e7e;}
+
+/* Small buttons for table actions */
+.btn-sm {
+  padding: 0.35rem 0.6rem; /* Smaller padding */
+  font-size: 0.8em; /* Smaller font */
 }
 
-.action-button.delete-button {
-  background-color: #dc3545; /* Red */
-  color: white;
+/* Icons (placeholders - use SVG or an icon font in a real app) */
+[class^="icon-"]::before {
+  display: inline-block;
+  margin-right: 0.4em;
+  /* font-family: "YourIconFont"; */ /* Replace with your icon font if you use one */
 }
-.action-button.delete-button:hover {
-  background-color: #b02a37;
-}
+.icon-add::before { content: '+'; font-weight: bold; } /* Simple text icon */
+.icon-barcode::before { content: '▋▋▋'; letter-spacing: -2px;} /* Simple text icon */
+.icon-edit::before { content: '✎'; }
+.icon-delete::before { content: '🗑️'; }
+
 </style>

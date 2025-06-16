@@ -1,84 +1,105 @@
 <template>
-  <div class="egresos-view">
-    <div class="form-container">
-      <h2>Registrar Egreso por Producto Dañado</h2>
-      <form @submit.prevent="recordExpense">
-        <div class="form-group">
-          <label for="product">Producto:</label>
-          <select id="product" v-model="expenseForm.productId" required>
-            <option value="" disabled>Seleccione un producto</option>
-            <option v-for="product in availableProducts" :key="product.id" :value="product.id">
-              {{ product.ecode }} - {{ product.brand }} {{ product.style }} (Stock: {{product.stock}})
-            </option>
-          </select>
-        </div>
-
-        <div class="form-group">
-          <label for="quantity">Cantidad Dañada:</label>
-          <input type="number" id="quantity" v-model.number="expenseForm.quantity" min="1" required>
-        </div>
-
-        <div class="form-group">
-          <label for="date">Fecha del Egreso:</label>
-          <input type="date" id="date" v-model="expenseForm.date" required>
-        </div>
-
-        <div class="form-group">
-          <label for="reason">Razón del Daño/Egreso:</label>
-          <textarea id="reason" v-model="expenseForm.reason" rows="3" required></textarea>
-        </div>
-
-        <div class="form-group">
-          <label for="notes">Notas Adicionales (Opcional):</label>
-          <textarea id="notes" v-model="expenseForm.notes" rows="2"></textarea>
-        </div>
-
-        <button type="submit" class="action-button primary">Registrar Egreso</button>
-      </form>
+  <div class="egresos-view card-base">
+    <div class="view-header">
+      <h2>Gestión de Egresos por Producto Dañado</h2>
+      <!-- No "Add" button here, form is always visible or could be in a collapsible section -->
     </div>
 
-    <div class="list-container">
-      <h3>Historial de Egresos</h3>
-      <table v-if="recordedExpensesList.length > 0" class="expenses-table">
-        <thead>
-          <tr>
-            <th>Fecha</th>
-            <th>Producto (E-code)</th>
-            <th>Cantidad</th>
-            <th>Razón</th>
-            <th>Notas</th>
-            <th>Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="expense in recordedExpensesList" :key="expense.id">
-            <td>{{ formatDate(expense.date) }}</td>
-            <td>{{ getProductEcode(expense.productId) }}</td>
-            <td>{{ expense.quantity }}</td>
-            <td>{{ expense.reason }}</td>
-            <td>{{ expense.notes }}</td>
-            <td>
-              <button @click="showEditExpenseForm(expense)" class="action-button edit-button">Editar</button>
-              <button @click="deleteExpense(expense.id)" class="action-button delete-button">Eliminar</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <p v-else class="no-expenses">No hay egresos registrados todavía.</p>
+    <div class="content-layout">
+      <div class="form-column">
+        <h3>Registrar Nuevo Egreso</h3>
+        <form @submit.prevent="triggerRecordExpense" class="expense-form">
+          <div class="form-group">
+            <label for="product">Producto:</label>
+            <select id="product" v-model="expenseForm.productId" required @change="updateSelectedProductStock">
+              <option value="" disabled>Seleccione un producto</option>
+              <option v-for="product in availableProductsForDropdown" :key="product.id" :value="product.id">
+                {{ product.ecode }} - {{ product.brand }} {{ product.style }} (Stock: {{product.stock}})
+              </option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="quantity">Cantidad Dañada:</label>
+            <input type="number" id="quantity" v-model.number="expenseForm.quantity" min="1" :max="selectedProductMaxStock" required>
+            <small v-if="expenseForm.productId && selectedProductMaxStock !== Infinity">Stock disponible para egreso: {{ selectedProductMaxStock }}</small>
+          </div>
+
+          <div class="form-group">
+            <label for="date">Fecha del Egreso:</label>
+            <input type="date" id="date" v-model="expenseForm.date" required>
+          </div>
+
+          <div class="form-group">
+            <label for="reason">Razón del Daño/Egreso:</label>
+            <textarea id="reason" v-model="expenseForm.reason" rows="3" required></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="notes">Notas Adicionales (Opcional):</label>
+            <textarea id="notes" v-model="expenseForm.notes" rows="2"></textarea>
+          </div>
+
+          <button type="submit" class="action-button primary-button full-width-button">
+            <i class="icon-save"></i> Registrar Egreso
+          </button>
+        </form>
+      </div>
+
+      <div class="list-column">
+        <h3>Historial de Egresos</h3>
+        <div class="table-container">
+          <table class="app-table expenses-table">
+            <thead>
+              <tr>
+                <th>Fecha</th>
+                <th>Producto</th>
+                <th>Cantidad</th>
+                <th>Razón</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="expensesListDisplay.length === 0">
+                <td colspan="5" class="no-results-message">No hay egresos registrados todavía.</td>
+              </tr>
+              <tr v-for="expense in expensesListDisplay" :key="expense.id">
+                <td data-label="Fecha">{{ formatDate(expense.date) }}</td>
+                <td data-label="Producto">{{ getProductDetails(expense.productId)?.ecode || 'N/A' }}</td>
+                <td data-label="Cantidad">{{ expense.quantity }}</td>
+                <td data-label="Razón" class="reason-cell" :title="expense.reason">{{ truncateText(expense.reason, 40) }}</td>
+                <td data-label="Acciones" class="actions-cell">
+                  <button @click="showEditExpenseForm(expense)" class="action-button warning-button btn-sm">
+                    <i class="icon-edit"></i> Editar
+                  </button>
+                  <button @click="triggerDeleteExpense(expense.id)" class="action-button danger-button btn-sm">
+                    <i class="icon-delete"></i> Eliminar
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
 
-    <!-- Edit Expense Modal (Similar to ProductosView) -->
-    <div v-if="showEditForm" class="modal-overlay">
-      <div class="modal-content">
-        <h2>Editar Egreso</h2>
-        <form @submit.prevent="updateExpense">
+
+    <!-- Edit Expense Modal -->
+    <div v-if="showEditForm" class="modal-overlay-global">
+      <div class="modal-content-global" style="max-width: 550px;">
+         <div class="modal-header-global">
+            <h3>Editar Egreso</h3>
+            <button @click="closeEditForm" class="modal-close-button">&times;</button>
+         </div>
+        <form @submit.prevent="triggerUpdateExpense">
           <div class="form-group">
             <label>Producto:</label>
-            <p><strong>{{ getProductEcode(editingExpenseForm.productId) }}</strong> (No se puede cambiar)</p>
+            <p><strong>{{ getProductDetails(editingExpenseForm.productId)?.ecode }} - {{ getProductDetails(editingExpenseForm.productId)?.brand }}</strong> <br><small>(No se puede cambiar el producto al editar)</small></p>
           </div>
           <div class="form-group">
             <label for="edit-quantity">Cantidad Dañada:</label>
-            <input type="number" id="edit-quantity" v-model.number="editingExpenseForm.quantity" min="1" required>
+            <input type="number" id="edit-quantity" v-model.number="editingExpenseForm.quantity" min="1" :max="editingProductMaxStock" required>
+            <small v-if="editingExpenseForm.productId && editingProductMaxStock !== Infinity">Máx. cantidad (actual + stock): {{ editingProductMaxStock }}</small>
           </div>
           <div class="form-group">
             <label for="edit-date">Fecha del Egreso:</label>
@@ -93,326 +114,212 @@
             <textarea id="edit-notes" v-model="editingExpenseForm.notes" rows="2"></textarea>
           </div>
           <div class="form-actions">
-            <button type="submit" class="action-button primary">Actualizar Egreso</button>
-            <button type="button" @click="closeEditForm" class="action-button secondary">Cancelar</button>
+             <button type="button" @click="closeEditForm" class="action-button secondary-button">Cancelar</button>
+            <button type="submit" class="action-button primary-button">Actualizar Egreso</button>
           </div>
         </form>
       </div>
     </div>
-
   </div>
 </template>
 
 <script setup>
+// Script remains largely the same
 import { ref, reactive, onMounted, computed } from 'vue';
-import { mockProducts } from '../data/mockProducts.js'; // For product selection and details
+import { useEgresosStore } from '@/stores/egresosStore.js';
+import { useProductStore } from '@/stores/productStore.js';
 
-// Use a deep copy for available products to avoid modifying the original mock data
-const availableProducts = ref(JSON.parse(JSON.stringify(mockProducts)));
-const recordedExpensesList = ref([]);
+const egresosStore = useEgresosStore();
+const productStore = useProductStore();
 
-const initialExpenseFormState = {
-  productId: '',
-  quantity: 1,
-  date: new Date().toISOString().slice(0, 10), // Default to today
-  reason: '',
-  notes: '',
+const availableProductsForDropdown = computed(() => productStore.products.filter(p => p.stock > 0)); // Only show products with stock
+const expensesListDisplay = computed(() => [...egresosStore.expensesList].sort((a,b) => new Date(b.date) - new Date(a.date)));
+
+const initialExpenseFormState = { /* ... */
+    productId: '', quantity: 1, date: new Date().toISOString().slice(0, 10), reason: '', notes: '',
 };
 const expenseForm = reactive({ ...initialExpenseFormState });
+let originalQuantityForEdit = 0;
 
-// For Edit Modal
 const showEditForm = ref(false);
-const editingExpenseId = ref(null);
-const initialEditingExpenseFormState = {
-  id: null,
-  productId: '',
-  quantity: 1,
-  date: '',
-  reason: '',
-  notes: '',
-};
-const editingExpenseForm = reactive({ ...initialEditingExpenseFormState });
+const editingExpenseForm = reactive({ ...initialExpenseFormState, id: null });
+const selectedProductMaxStock = ref(Infinity);
 
+function updateSelectedProductStock() {
+    if (expenseForm.productId) {
+        const product = productStore.getProductById(expenseForm.productId);
+        selectedProductMaxStock.value = product ? product.stock : 0;
+    } else {
+        selectedProductMaxStock.value = Infinity;
+    }
+     if(expenseForm.quantity > selectedProductMaxStock.value) expenseForm.quantity = selectedProductMaxStock.value; // Adjust if current qty exceeds new max
+}
+const editingProductMaxStock = computed(() => {
+    if (editingExpenseForm.productId) {
+        const product = productStore.getProductById(editingExpenseForm.productId);
+        return product ? product.stock + originalQuantityForEdit : 0;
+    }
+    return Infinity;
+});
 
-const recordExpense = () => {
+const triggerRecordExpense = () => {
   if (!expenseForm.productId || expenseForm.quantity <= 0 || !expenseForm.date || !expenseForm.reason) {
-    alert('Por favor, complete todos los campos requeridos.');
-    return;
+    alert('Complete los campos requeridos.'); return;
   }
-
-  const product = availableProducts.value.find(p => p.id === expenseForm.productId);
-  if (!product) {
-    alert('Producto seleccionado no válido.');
-    return;
+  const product = productStore.getProductById(expenseForm.productId);
+  if (!product || product.stock < expenseForm.quantity) {
+    alert(`Stock insuficiente. Disponible: ${product?.stock || 0}.`); return;
   }
-  if (expenseForm.quantity > product.stock) {
-    alert(`La cantidad de egreso (${expenseForm.quantity}) excede el stock disponible (${product.stock}) para ${product.ecode}.`);
-    return;
-  }
-
-  // Update stock in availableProducts (simulating backend update)
-  product.stock -= expenseForm.quantity;
-
-  const newExpense = {
-    id: Date.now(), // Simple unique ID
-    ...expenseForm,
-  };
-  recordedExpensesList.value.unshift(newExpense);
-
-  // Reset form
-  Object.assign(expenseForm, {
-    ...initialExpenseFormState,
-    date: new Date().toISOString().slice(0, 10) // Keep date as today for next entry
-  });
+  egresosStore.addExpense({ ...expenseForm });
+  Object.assign(expenseForm, { ...initialExpenseFormState, date: new Date().toISOString().slice(0, 10) });
+  selectedProductMaxStock.value = Infinity;
+  updateSelectedProductStock(); // Update stock for next selection
 };
-
-const getProductEcode = (productId) => {
-  const product = mockProducts.find(p => p.id === productId); // Use original mockProducts for display consistency
-  return product ? product.ecode : 'Desconocido';
+const showEditExpenseForm = (expense) => {
+  Object.assign(editingExpenseForm, JSON.parse(JSON.stringify(expense)));
+  originalQuantityForEdit = expense.quantity;
+  showEditForm.value = true;
 };
-
+const closeEditForm = () => {
+  showEditForm.value = false;
+  Object.assign(editingExpenseForm, { ...initialExpenseFormState, id: null });
+  originalQuantityForEdit = 0;
+};
+const triggerUpdateExpense = () => {
+  if (editingExpenseForm.quantity <= 0 || !editingExpenseForm.date || !editingExpenseForm.reason) {
+    alert('Complete los campos requeridos.'); return;
+  }
+  const product = productStore.getProductById(editingExpenseForm.productId);
+  if (!product) { alert('Producto no encontrado.'); return; }
+  const maxAllowed = product.stock + originalQuantityForEdit;
+  if (editingExpenseForm.quantity > maxAllowed) {
+    alert(`Cantidad excede stock disponible + original. Máximo: ${maxAllowed}`); return;
+  }
+  egresosStore.updateExpense({ ...editingExpenseForm }, originalQuantityForEdit);
+  closeEditForm();
+};
+const triggerDeleteExpense = (expenseId) => {
+  if (window.confirm('¿Seguro que desea eliminar? El stock será ajustado.')) {
+    egresosStore.deleteExpense(expenseId);
+  }
+};
+const getProductDetails = (productId) => productStore.getProductById(productId);
 const formatDate = (dateString) => {
   if (!dateString) return 'N/A';
   const date = new Date(dateString);
-  // Make sure to use UTC to avoid timezone issues with date-only strings
-  return new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()).toLocaleDateString();
+  date.setMinutes(date.getMinutes() + date.getTimezoneOffset());
+  return date.toLocaleDateString('es-ES', { year: 'numeric', month: '2-digit', day: '2-digit' });
 };
-
-// --- Edit and Delete Logic ---
-const showEditExpenseForm = (expense) => {
-  editingExpenseId.value = expense.id;
-  Object.assign(editingExpenseForm, expense);
-  showEditForm.value = true;
+const truncateText = (text, length) => {
+  if (text && text.length > length) return text.substring(0, length) + '...';
+  return text || 'N/A';
 };
-
-const closeEditForm = () => {
-  showEditForm.value = false;
-  editingExpenseId.value = null;
-  Object.assign(editingExpenseForm, initialEditingExpenseFormState);
-};
-
-const updateExpense = () => {
-  if (editingExpenseForm.quantity <= 0 || !editingExpenseForm.date || !editingExpenseForm.reason) {
-    alert('Por favor, complete todos los campos requeridos para la edición.');
-    return;
-  }
-
-  const index = recordedExpensesList.value.findIndex(exp => exp.id === editingExpenseId.value);
-  if (index !== -1) {
-    const originalExpense = recordedExpensesList.value[index];
-    const product = availableProducts.value.find(p => p.id === originalExpense.productId);
-
-    if (product) {
-      // Calculate stock adjustment:
-      // Add back original quantity, then subtract new quantity
-      const quantityDifference = editingExpenseForm.quantity - originalExpense.quantity;
-      if (product.stock - quantityDifference < 0 && quantityDifference > 0) {
-         alert(`La cantidad de egreso (${editingExpenseForm.quantity}) excede el stock disponible (${product.stock + originalExpense.quantity}) para ${product.ecode}.`);
-         return;
-      }
-      product.stock -= quantityDifference;
-    }
-
-    recordedExpensesList.value[index] = { ...editingExpenseForm };
-  }
-  closeEditForm();
-};
-
-const deleteExpense = (expenseId) => {
-  if (window.confirm('¿Está seguro de que desea eliminar este registro de egreso?')) {
-    const index = recordedExpensesList.value.findIndex(exp => exp.id === expenseId);
-    if (index !== -1) {
-      const expenseToDelete = recordedExpensesList.value[index];
-      const product = availableProducts.value.find(p => p.id === expenseToDelete.productId);
-      // Add back the quantity to stock
-      if (product) {
-        product.stock += expenseToDelete.quantity;
-      }
-      recordedExpensesList.value.splice(index, 1);
-    }
-  }
-};
-
-// Initialize form date
 onMounted(() => {
   expenseForm.date = new Date().toISOString().slice(0, 10);
+  updateSelectedProductStock(); // Initial call in case a product is pre-selected or form is pre-filled
 });
-
 </script>
 
 <style scoped>
-.egresos-view {
-  padding: 20px;
+/* .egresos-view { padding: 20px; } */ /* Applied by .card-base */
+
+.view-header { margin-bottom: 1.5rem; }
+.view-header h2 { color: var(--text-dark); }
+@media (prefers-color-scheme: dark) {
+  .view-header h2 { color: var(--dm-text-dark); }
+}
+
+
+.content-layout {
   display: flex;
-  flex-direction: column;
-  gap: 30px;
+  gap: 2rem; /* Space between form and list */
+  flex-wrap: wrap; /* Wrap for smaller screens */
+}
+.form-column {
+  flex: 1;
+  min-width: 300px; /* Minimum width for the form column */
+  /* background-color: var(--bg-card); */ /* Card bg for form section - removed, view has card-base */
+  /* padding: 1.5rem; */
+  /* border-radius: var(--border-radius-base); */
+  /* box-shadow: var(--box-shadow-sm); */
+}
+.list-column {
+  flex: 2;
+  min-width: 400px; /* Minimum width for the list column */
+}
+.form-column h3, .list-column h3 {
+    margin-bottom: 1rem;
+    color: var(--text-dark);
+    font-size: 1.25em;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.5rem;
+}
+@media (prefers-color-scheme: dark) {
+  .form-column h3, .list-column h3 { color: var(--dm-text-dark); border-bottom-color: var(--dm-border-color); }
 }
 
-.form-container, .list-container {
-  background-color: #fff;
-  padding: 25px;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+
+.expense-form .form-group { margin-bottom: 1rem; } /* Slightly less margin */
+.expense-form .action-button { margin-top: 0.5rem; }
+
+.full-width-button { width: 100%; }
+
+.table-container { margin-top: 0; } /* No extra top margin if h3 is present */
+/* .app-table is global */
+.expenses-table .actions-cell { text-align: right; white-space: nowrap; }
+.expenses-table .actions-cell .action-button { margin-left: 0.3rem; }
+.reason-cell {
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-.form-container h2, .list-container h3 {
-  margin-top: 0;
-  margin-bottom: 20px;
-  color: #333;
-  border-bottom: 1px solid #eee;
-  padding-bottom: 10px;
+.no-results-message { text-align: center; padding: 1.5rem; color: var(--text-muted); font-style: italic; }
+
+/* Modal styles use global .modal-overlay-global and .modal-content-global */
+.modal-close-button { /* Copied from ProductosView for consistency */
+  background: none; border: none; font-size: 1.75rem; line-height: 1;
+  color: var(--text-muted); cursor: pointer; padding: 0.5rem;
+  position: absolute; top: 10px; right: 15px;
+}
+.modal-close-button:hover { color: var(--text-dark); }
+@media (prefers-color-scheme: dark) {
+  .modal-close-button { color: var(--dm-text-dark); opacity: 0.7; }
+  .modal-close-button:hover { opacity: 1; }
+}
+.modal-content-global .form-group p { /* For non-editable product in edit modal */
+  font-size: 0.95em; background-color: var(--bg-light);
+  padding: 0.5rem 0.75rem; border-radius: var(--border-radius-base);
+  border: 1px solid var(--border-color); margin:0;
+}
+@media (prefers-color-scheme: dark) {
+    .modal-content-global .form-group p { background-color: var(--dm-bg-main); border-color: var(--dm-border-color);}
+}
+.modal-content-global .form-actions {
+  display: flex; justify-content: flex-end; gap: 0.75rem;
+  margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);
+}
+@media (prefers-color-scheme: dark) {
+  .modal-content-global .form-actions { border-top-color: var(--dm-border-color); }
 }
 
-.form-group {
-  margin-bottom: 15px;
-}
 
-.form-group label {
-  display: block;
-  margin-bottom: 6px;
-  font-weight: bold;
-  font-size: 0.9em;
-  color: #555;
-}
+/* Button styles from global, specific type (primary, danger, etc.) are applied in template */
+.primary-button { background-color: var(--primary-color); border-color: var(--primary-color); color: var(--text-light); }
+.primary-button:hover { background-color: #0056b3; border-color: #0052a9; }
+.secondary-button { background-color: var(--secondary-color); border-color: var(--secondary-color); color: var(--text-light); }
+.secondary-button:hover { background-color: #545b62; border-color: #4e555b; }
+.danger-button { background-color: var(--danger-color); border-color: var(--danger-color); color: var(--text-light); }
+.danger-button:hover { background-color: #b02a37; border-color: #a52834;}
+.warning-button { background-color: var(--warning-color); border-color: var(--warning-color); color: var(--text-dark); }
+.warning-button:hover { background-color: #d39e00; border-color: #c69500;}
 
-.form-group input[type="text"],
-.form-group input[type="number"],
-.form-group input[type="date"],
-.form-group select,
-.form-group textarea {
-  width: 100%;
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  box-sizing: border-box;
-  font-size: 0.95em;
-}
+.btn-sm { padding: 0.35rem 0.6rem; font-size: 0.8em; }
 
-.form-group textarea {
-  resize: vertical;
-}
-
-.action-button {
-  padding: 10px 18px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1em;
-  transition: background-color 0.2s ease;
-}
-
-.action-button.primary {
-  background-color: #007bff; /* Blue */
-  color: white;
-}
-.action-button.primary:hover {
-  background-color: #0056b3;
-}
-
-.expenses-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 15px;
-}
-
-.expenses-table th,
-.expenses-table td {
-  border: 1px solid #dee2e6;
-  padding: 10px 12px;
-  text-align: left;
-  font-size: 0.9em;
-  vertical-align: middle;
-}
-
-.expenses-table th {
-  background-color: #f8f9fa;
-  font-weight: bold;
-  color: #495057;
-}
-
-.expenses-table tbody tr:nth-child(even) {
-  background-color: #f9f9f9;
-}
-.expenses-table tbody tr:hover {
-  background-color: #f1f1f1;
-}
-
-.no-expenses {
-  text-align: center;
-  padding: 20px;
-  color: #6c757d;
-  font-style: italic;
-}
-
-.action-button.edit-button {
-  background-color: #ffc107; /* Yellow */
-  color: #212529;
-  margin-right: 5px;
-  font-size: 0.85em;
-  padding: 6px 10px;
-}
-.action-button.edit-button:hover {
-  background-color: #e0a800;
-}
-
-.action-button.delete-button {
-  background-color: #dc3545; /* Red */
-  color: white;
-  font-size: 0.85em;
-  padding: 6px 10px;
-}
-.action-button.delete-button:hover {
-  background-color: #c82333;
-}
-
-/* Modal styles (reusing from ProductosView concept) */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background-color: white;
-  padding: 25px;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-  width: 90%;
-  max-width: 550px;
-  max-height: 90vh;
-  overflow-y: auto;
-}
-
-.modal-content h2 {
-  margin-top: 0;
-  margin-bottom: 20px;
-  color: #333;
-}
-.modal-content .form-group p {
-  font-size: 0.95em;
-  background-color: #f0f0f0;
-  padding: 8px;
-  border-radius: 4px;
-}
-
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 20px;
-}
-.action-button.secondary {
-  background-color: #6c757d; /* Gray */
-  color: white;
-}
-.action-button.secondary:hover {
-  background-color: #545b62;
-}
+/* Icons */
+[class^="icon-"]::before { display: inline-block; margin-right: 0.4em; }
+.icon-save::before { content: '💾'; } /* Placeholder */
+.icon-edit::before { content: '✎'; }
+.icon-delete::before { content: '🗑️'; }
 </style>

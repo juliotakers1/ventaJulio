@@ -1,7 +1,7 @@
 <template>
-  <div class="reportes-view">
-    <header class="report-header">
-      <h1>Central de Reportes</h1>
+  <div class="reportes-view card-base"> <!-- Use card-base for overall padding and background -->
+    <header class="view-header">
+      <h2>Central de Reportes</h2>
       <p>Seleccione un reporte de la lista para visualizarlo.</p>
     </header>
 
@@ -9,49 +9,53 @@
       <ul>
         <li>
           <button @click="showReport('MonthlySalesByVendor', ReportMonthlySalesByVendor)"
-                  :class="{ active: selectedReportName === 'MonthlySalesByVendor' }">
+                  :class="{ active: selectedReportName === 'MonthlySalesByVendor' }"
+                  class="action-button secondary-button"> <!-- Themed button -->
             Ventas Mensuales por Vendedor
           </button>
         </li>
         <li>
           <button @click="showReport('GeneralSales', ReportGeneralSales)"
-                  :class="{ active: selectedReportName === 'GeneralSales' }">
+                  :class="{ active: selectedReportName === 'GeneralSales' }"
+                  class="action-button secondary-button">
             Reporte General de Ventas
           </button>
         </li>
         <li>
           <button @click="showReport('DailySales', ReportDailySales)"
-                  :class="{ active: selectedReportName === 'DailySales' }">
+                  :class="{ active: selectedReportName === 'DailySales' }"
+                  class="action-button secondary-button">
             Reporte Diario de Ventas
           </button>
         </li>
         <li>
           <button @click="showReport('IncomeAndExpenses', ReportIncomeAndExpenses)"
-                  :class="{ active: selectedReportName === 'IncomeAndExpenses' }">
+                  :class="{ active: selectedReportName === 'IncomeAndExpenses' }"
+                  class="action-button secondary-button">
             Reporte de Ingresos y Egresos
           </button>
         </li>
       </ul>
-        <button v-if="currentReportComponent" @click="clearReportView" class="clear-report-button">
-            Limpiar Vista de Reporte
-        </button>
+      <button v-if="currentReportComponent" @click="clearReportView" class="action-button danger-button-outline mt-2">
+        <i class="icon-clear"></i> Limpiar Vista de Reporte
+      </button>
     </nav>
 
-    <div class="report-content-area">
+    <div class="report-content-area card-base mt-3"> <!-- Inner card for report content -->
       <div v-if="!currentReportComponent" class="no-report-selected">
+        <i class="icon-reports-placeholder"></i>
         <p>Por favor, seleccione un reporte para comenzar.</p>
       </div>
-      <keep-alive>
+      <!-- <keep-alive> --> <!-- Keep-alive can be problematic if reports need fresh state always -->
         <component :is="currentReportComponent" v-if="currentReportComponent"></component>
-      </keep-alive>
+      <!-- </keep-alive> -->
     </div>
   </div>
 </template>
 
 <script setup>
+// Script remains the same
 import { ref, shallowRef } from 'vue';
-
-// Import report components
 import ReportMonthlySalesByVendor from '../components/reports/ReportMonthlySalesByVendor.vue';
 import ReportGeneralSales from '../components/reports/ReportGeneralSales.vue';
 import ReportDailySales from '../components/reports/ReportDailySales.vue';
@@ -59,49 +63,40 @@ import ReportIncomeAndExpenses from '../components/reports/ReportIncomeAndExpens
 
 const selectedReportName = ref('');
 const currentReportComponent = shallowRef(null);
-
 const showReport = (reportName, reportComponent) => {
   selectedReportName.value = reportName;
   currentReportComponent.value = reportComponent;
 };
-
 const clearReportView = () => {
   selectedReportName.value = '';
   currentReportComponent.value = null;
 };
-
 </script>
 
 <style scoped>
-.reportes-view {
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+/* .reportes-view { padding: 20px; } */ /* Applied by .card-base */
+
+.view-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+.view-header h2 { margin:0 0 0.5rem 0; color: var(--text-dark); font-size: 1.75em;}
+.view-header p { margin: 0; color: var(--text-muted); font-size: 1em; }
+@media (prefers-color-scheme: dark) {
+  .view-header { border-bottom-color: var(--dm-border-color); }
+  .view-header h2 { color: var(--dm-text-dark); }
+  .view-header p { color: var(--dm-text-dark); opacity: 0.8; }
 }
 
-.report-header {
-  background-color: #f8f9fa;
-  padding: 15px 20px;
-  border-radius: 8px;
-  text-align: center;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-}
-.report-header h1 {
-  margin: 0 0 5px 0;
-  color: #333;
-}
-.report-header p {
-  margin: 0;
-  color: #555;
-  font-size: 0.95em;
-}
 
 .report-selector {
-  background-color: #fff;
-  padding: 15px;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  /* background-color: var(--bg-card); */ /* Removed, view has card-base */
+  /* padding: 1.5rem; */
+  /* border-radius: var(--border-radius-base); */
+  /* box-shadow: var(--box-shadow-sm); */
+  margin-bottom: 1rem; /* Space before content area */
 }
 
 .report-selector ul {
@@ -109,128 +104,98 @@ const clearReportView = () => {
   padding: 0;
   margin: 0;
   display: flex;
-  flex-wrap: wrap; /* Allow buttons to wrap on smaller screens */
-  gap: 10px; /* Spacing between buttons */
-  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.75rem; /* Space between buttons */
+  justify-content: center; /* Center buttons */
 }
 
-.report-selector li button {
-  padding: 10px 15px;
-  border: 1px solid #007bff;
-  background-color: white;
-  color: #007bff;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: background-color 0.2s ease, color 0.2s ease;
+.report-selector li button.action-button { /* Overriding some global .action-button for this context */
+  width: 100%; /* Make buttons full width of their li container if flex basis allows */
+  padding: 0.75rem 1rem; /* Slightly larger padding */
   font-size: 0.9em;
   font-weight: 500;
+  background-color: var(--bg-light);
+  border: 1px solid var(--border-color);
+  color: var(--text-dark);
+}
+.report-selector li button.action-button:hover {
+  background-color: var(--primary-color);
+  color: var(--text-light);
+  border-color: var(--primary-color);
+}
+.report-selector li button.action-button.active {
+  background-color: var(--primary-color);
+  color: var(--text-light);
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px rgba(0,123,255,.35);
+}
+@media (prefers-color-scheme: dark) {
+  .report-selector li button.action-button {
+    background-color: var(--dm-bg-card);
+    border-color: var(--dm-border-color);
+    color: var(--dm-text-dark);
+  }
+   .report-selector li button.action-button:hover {
+    background-color: var(--primary-color);
+    color: var(--text-light);
+    border-color: var(--primary-color);
+  }
+  .report-selector li button.action-button.active {
+    background-color: var(--primary-color);
+    color: var(--text-light);
+    border-color: var(--primary-color);
+  }
 }
 
-.report-selector li button:hover {
-  background-color: #007bff;
-  color: white;
-}
 
-.report-selector li button.active {
-  background-color: #0056b3; /* Darker blue for active */
-  color: white;
-  border-color: #0056b3;
-}
-.clear-report-button {
-  margin-top: 15px;
-  padding: 8px 15px;
-  border: 1px solid #6c757d;
-  background-color: #6c757d;
-  color: white;
-  border-radius: 5px;
-  cursor: pointer;
-  display: block; /* Make it a block to center it if needed, or use flex on parent */
+.report-selector .danger-button-outline { /* For "Limpiar Vista" */
+  display: block; /* Center it */
   margin-left: auto;
   margin-right: auto;
+  min-width: 200px;
+  background-color: transparent;
+  color: var(--danger-color);
+  border: 1px solid var(--danger-color);
 }
-.clear-report-button:hover {
-    background-color: #5a6268;
+.report-selector .danger-button-outline:hover {
+  background-color: var(--danger-color);
+  color: var(--text-light);
 }
 
 
 .report-content-area {
-  background-color: #fff;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
-  min-height: 300px; /* Give some minimum height */
-  display: flex; /* To center the no-report-selected message */
+  /* background-color: var(--bg-card); */ /* Applied by .card-base */
+  /* padding: 1.5rem; */ /* Applied by .card-base */
+  /* border-radius: var(--border-radius-base); */ /* Applied by .card-base */
+  /* box-shadow: var(--box-shadow); */ /* Applied by .card-base */
+  min-height: 400px;
+  display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start; /* Align content to top */
 }
-.report-content-area > div { /* Ensure report component takes full width */
-    width: 100%;
-    align-self: flex-start; /* Align report to top */
-}
-
+/* .report-content-area > div for full width is in global styles */
 
 .no-report-selected {
   text-align: center;
-  color: #777;
+  color: var(--text-muted);
   font-style: italic;
+  margin-top: 3rem; /* More space from top */
+}
+.no-report-selected i {
+    font-size: 3em;
+    display: block;
+    margin-bottom: 0.5rem;
+    color: var(--secondary-color); /* Muted icon color */
+}
+@media (prefers-color-scheme: dark) {
+  .no-report-selected { color: var(--dm-text-dark); opacity: 0.7; }
+  .no-report-selected i { color: var(--secondary-color); opacity: 0.5; }
 }
 
-/* Styling for individual reports will be within their components,
-   but some global report styles could go here if needed */
-:deep(.report-table) { /* Using :deep to style tables within child components */
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 15px;
-  font-size: 0.9em;
-}
-:deep(.report-table th), :deep(.report-table td) {
-  border: 1px solid #ddd;
-  padding: 8px 10px;
-  text-align: left;
-}
-:deep(.report-table th) {
-  background-color: #f2f2f2;
-  font-weight: bold;
-}
-:deep(.report-table tr:nth-child(even)) {
-  background-color: #f9f9f9;
-}
-:deep(.report-table caption) {
-  caption-side: top;
-  font-size: 1.1em;
-  font-weight: bold;
-  margin-bottom: 10px;
-  text-align: left;
-  color: #333;
-}
-:deep(.report-filters) {
-    margin-bottom: 15px;
-    padding: 10px;
-    background-color: #f9f9f9;
-    border-radius: 4px;
-    display: flex;
-    gap: 15px;
-    align-items: center;
-}
-:deep(.report-filters label) {
-    font-weight: bold;
-    margin-right: 5px;
-}
-:deep(.report-filters input[type="date"]), :deep(.report-filters select) {
-    padding: 6px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-}
-:deep(.report-totals) {
-    margin-top: 15px;
-    padding: 10px;
-    background-color: #e9ecef;
-    border-radius: 4px;
-}
-:deep(.report-totals p) {
-    margin: 5px 0;
-    font-size: 1em;
-    font-weight: bold;
-}
 
+/* :deep styles for tables, filters, totals inside child report components are in global style.css */
+
+/* Icons */
+.icon-clear::before { content: '🧹'; margin-right: 0.5em;}
+.icon-reports-placeholder::before { content: '📈';}
 </style>
